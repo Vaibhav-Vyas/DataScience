@@ -26,7 +26,7 @@ class BlogSpider(scrapy.Spider):
     name = 'blogspider'
 
     # IMDB: Top URL for Genres=Action. Has 30,000 movies.
-    start_urls = ['http://www.imdb.com/search/title?genres=action&sort=moviemeter,asc&start=251&title_type=feature']
+    start_urls = ['http://www.imdb.com/search/title?genres=action&sort=moviemeter,asc&start=51&title_type=feature']
     #start_urls = ['http://www.imdb.com/chart/top']
     #start_urls = ['http://www.imdb.com/title/tt0120338/']
     #start_urls = ['http://www.imdb.com/title/tt0120338/?ref_=fn_al_tt_1']
@@ -36,7 +36,7 @@ class BlogSpider(scrapy.Spider):
     allowed_domains = ['imdb.com']
     
     # Lets limit the number of pages to be crawled per second.
-    rate = 0.5
+    rate = 0.25
     
     # HTML Directory   
     htmlDirName = ''
@@ -106,6 +106,10 @@ class BlogSpider(scrapy.Spider):
 
         self.appendRecordToFile(self.csvFp, self.recordHeader)
         
+        for i in range(1, 150):
+            index = i * 50 + 1
+            self.start_urls.append('http://www.imdb.com/search/title?genres=action&sort=moviemeter,asc&start=' + str(index) + '&title_type=feature')
+        
 
     def parse(self, response):
         base_url = 'http://www.imdb.com'
@@ -133,9 +137,13 @@ class BlogSpider(scrapy.Spider):
         for url in response.xpath('//td[@class="title"]/a/@href').extract():
             movie_url = base_url + str(url)
             print ("URL found => " + movie_url)
-
             yield scrapy.Request(movie_url, self.parse_movies)
 
+    def unicode_to_ascii(self, strInput):
+        strInput = unicodedata.normalize('NFKD', strInput).encode('ascii','ignore')
+        strInput.strip()
+        return strInput
+    
     def parse_movies(self, response):
         self.crawlCount = self.crawlCount + 1
         print ("-------------------------Starting Crawling:" + str(self.crawlCount) + "-------------")
@@ -159,6 +167,17 @@ class BlogSpider(scrapy.Spider):
         time_duration = time_duration.replace('\n', ' ')
         movie_html_source_code = response.body
         
+        
+        #movie_link = self.unicode_to_ascii(movie_link)
+        #movie_title = self.unicode_to_ascii(movie_title)
+        #star_rating = self.unicode_to_ascii(star_rating)
+        #release_year = self.unicode_to_ascii(release_year)
+        #release_date = self.unicode_to_ascii(release_date)
+        release_country = self.unicode_to_ascii(release_country)
+        #director = self.unicode_to_ascii(director)
+        #stars_list = self.unicode_to_ascii(stars_list)
+        #genre_list = self.unicode_to_ascii(genre_list)
+        time_duration = self.unicode_to_ascii(time_duration)
 
         # Lets store a local copy of this page.
         # Creating filename from the key present in the path
@@ -183,8 +202,8 @@ class BlogSpider(scrapy.Spider):
         print ("    Movie release_date =>  " + release_date)
         print ("    Movie release_country =>  " + release_country)
         print ("    Movie Director =>  " + director)
-        print ("    Movie Stars_list =>  " + ', '.join(stars_list))
-        print ("    Movie Genre_list =>  " + ', '.join(genre_list))
+        print ("    Movie Stars_list =>  " + '; '.join(stars_list))
+        print ("    Movie Genre_list =>  " + '; '.join(genre_list))
         print ("    Movie time_duration =>  " + time_duration)
         print ("    Movie movie_filename =>  " + movie_filename)
         print ("    Movie movie_folder name =>  " + self.htmlDirPath)
@@ -198,10 +217,10 @@ class BlogSpider(scrapy.Spider):
         #for post_title in response.css('div.entries > ul > li a::text').extract():
         #    print ("movie_title" + movie_title)
 
-        yield {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : ', '.join(stars_list), 'genre_list' : ', '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
+        yield {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : '; '.join(stars_list), 'genre_list' : '; '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
         
         
-        jsonRecord = {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : ', '.join(stars_list), 'genre_list' : ', '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
+        jsonRecord = {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : '; '.join(stars_list), 'genre_list' : '; '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
         # Convert Unicode to Ascii
         #jsonRecord = unicodedata.normalize('NFKD', jsonRecord).encode('ascii','ignore')
 
