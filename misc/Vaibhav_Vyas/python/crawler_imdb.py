@@ -36,13 +36,14 @@ class BlogSpider(scrapy.Spider):
     allowed_domains = ['imdb.com']
     
     # Lets limit the number of pages to be crawled per second.
-    rate = 1
+    rate = 0.5
     
     # HTML Directory   
     htmlDirName = ''
     htmlDirPath = ''
     csvFilename = ''
     csvFp = 0
+    jsonFp = 0
     recordHeader = ''
     crawlCount = 0
 
@@ -55,11 +56,23 @@ class BlogSpider(scrapy.Spider):
         # Restore
         cdToPath(cacheCwd)
 
-    def appendRecordToCsvFile(self, stringToWrite):
-        self.csvFp.write(stringToWrite)
+    def openJsonFile(self, folderPath, filename, headerToWrite):
+        cacheCwd = os.getcwd()
+        cdToPath(folderPath)
+
+        self.jsonFp = open(filename, 'w')
+        self.jsonFp.write(headerToWrite)
+        # Restore
+        cdToPath(cacheCwd)
+
+    def appendRecordToFile(self, filePtr, stringToWrite):
+        filePtr.write(stringToWrite)
         
-    def closeCsvFile(self, folderPath, filename):
+    def closeCsvFile(self):
         self.csvFp.close()
+
+    def closeJsonFile(self):
+        self.jsonFp.close()
 
     def __init__(self):
         self.download_delay = 1/float(self.rate)
@@ -69,7 +82,9 @@ class BlogSpider(scrapy.Spider):
         self.htmlDirName = "IMDB_HTML_Files_" + scriptLaunchTime
         filename = "testFile.txt"
         self.csvFilename = "result_allMoviesParsed_IMDB.csv"
-        self.recordHeader = 'record_id, movie_title, movie_url, movie_star_rating,release_year, release_date, release_country, director, stars_list, genre_list, time_duration, movie_filename, movie_folder name'
+        self.jsonFilename = "result_allMoviesParsed_IMDB_Json.json"
+
+        self.recordHeader = 'record_id, movie_title, movie_url, movie_star_rating,release_year, release_date, release_country, director, stars_list, genre_list, time_duration, movie_filename, movie_folder name\n'
         headerToWrite = 'IMDB Movie retrieval results \n\n'
         
         # Lets create results dir.
@@ -87,8 +102,9 @@ class BlogSpider(scrapy.Spider):
         writeToFile(self.htmlDirPath, filename, "Hello! I am creating this dummy file.\n" + scriptLaunchTime)
 
         self.openCsvFile(self.htmlDirPath,self.csvFilename, headerToWrite)
+        self.openJsonFile(self.htmlDirPath,self.jsonFilename, ' ')
 
-        self.appendRecordToCsvFile(self.recordHeader)
+        self.appendRecordToFile(self.csvFp, self.recordHeader)
         
 
     def parse(self, response):
@@ -184,8 +200,18 @@ class BlogSpider(scrapy.Spider):
 
         yield {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : ', '.join(stars_list), 'genre_list' : ', '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
         
-        currMovieAsCsv = movie_record_pri_key + ',' + movie_title + ',' + movie_link + ',' + star_rating + ',' + release_year + ',' + release_date + ',' + release_country + ',' + director + ',' + '; '.join(stars_list) + ',' + '; '.join(genre_list) + ',' + time_duration + ',' + movie_filename + ',' + self.htmlDirPath
-        self.appendRecordToCsvFile(currMovieAsCsv)
         
+        jsonRecord = {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : ', '.join(stars_list), 'genre_list' : ', '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
+        # Convert Unicode to Ascii
+        #jsonRecord = unicodedata.normalize('NFKD', jsonRecord).encode('ascii','ignore')
+
+        currMovieAsCsv = movie_record_pri_key + ',' + movie_title + ',' + movie_link + ',' + star_rating + ',' + release_year + ',' + release_date + ',' + release_country + ',' + director + ',' + '; '.join(stars_list) + ',' + '; '.join(genre_list) + ',' + time_duration + ',' + movie_filename + ',' + self.htmlDirPath + '\n'
+        # Convert Unicode to Ascii
+        currMovieAsCsv = unicodedata.normalize('NFKD', currMovieAsCsv).encode('ascii','ignore')
+
+        self.appendRecordToFile(self.csvFp, currMovieAsCsv)
+        self.appendRecordToFile(self.jsonFp, str(jsonRecord).encode('utf8'))
+        self.appendRecordToFile(self.jsonFp, '\n')
+
         print ("-------------------------END Crawling:" + str(self.crawlCount) + "------------------")
 
