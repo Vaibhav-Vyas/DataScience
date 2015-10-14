@@ -35,9 +35,16 @@ class BlogSpider(scrapy.Spider):
         movie_link = response.url
         movie_title = response.xpath("//span[@class='itemprop' and @itemprop='name']/text()").extract()[0]
         movie_html_source_code = response.body
+        star_rating = response.xpath("//div[@class='star-box giga-star']/div[@class='titlePageSprite star-box-giga-star']/text()").extract()[0]
+        release_year = response.xpath("//table[@id='title-overview-widget-layout']//h1[@class='header']/span[@class='nobr']/a/text()").extract()[0]
+        release_date = response.xpath("//table[@id='title-overview-widget-layout']//div[@class='infobar']/span[@class='nobr']/a/text()").extract()[0]
+        release_country = response.xpath("//table[@id='title-overview-widget-layout']//div[@class='infobar']/span[@class='nobr']/a/text()").extract()[1]
 
+        director = response.xpath("//table[@id='title-overview-widget-layout']//div[@class='txt-block'][1]/a/span[@class='itemprop']/text()").extract()[0]
+        
         print ("    Movie Title =>  " + movie_title)
         print ("    Movie URL =>  " + movie_link)
+        print ("    Movie Star Rating =>  " + star_rating)
         
         # Print / write to file the entire HTML contents.
         #print ("HTML Source Code" + movie_html_source_code)
