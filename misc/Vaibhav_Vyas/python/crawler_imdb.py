@@ -1,6 +1,7 @@
 import scrapy
 import time
 import os
+import unicodedata
 
 def writeToFile(folderPath, filename, stringToWrite):
     cacheCwd = os.getcwd()
@@ -12,7 +13,7 @@ def writeToFile(folderPath, filename, stringToWrite):
 
     # Restore
     cdToPath(cacheCwd)
-
+   
 # make dirs
 def makeDirs(destDir):
     if not os.path.exists(destDir):
@@ -40,8 +41,26 @@ class BlogSpider(scrapy.Spider):
     # HTML Directory   
     htmlDirName = ''
     htmlDirPath = ''
+    csvFilename = ''
+    csvFp = 0
+    recordHeader = ''
     crawlCount = 0
-    
+
+    def openCsvFile(self, folderPath, filename, headerToWrite):
+        cacheCwd = os.getcwd()
+        cdToPath(folderPath)
+
+        self.csvFp = open(filename, 'w')
+        self.csvFp.write(headerToWrite)
+        # Restore
+        cdToPath(cacheCwd)
+
+    def appendRecordToCsvFile(self, stringToWrite):
+        self.csvFp.write(stringToWrite)
+        
+    def closeCsvFile(self, folderPath, filename):
+        self.csvFp.close()
+
     def __init__(self):
         self.download_delay = 1/float(self.rate)
        
@@ -49,7 +68,10 @@ class BlogSpider(scrapy.Spider):
         scriptLaunchTime = time.strftime("%Y_%m_%d_%H-%M-%S")
         self.htmlDirName = "IMDB_HTML_Files_" + scriptLaunchTime
         filename = "testFile.txt"
-
+        self.csvFilename = "result_allMoviesParsed_IMDB.csv"
+        self.recordHeader = 'record_id, movie_title, movie_url, movie_star_rating,release_year, release_date, release_country, director, stars_list, genre_list, time_duration, movie_filename, movie_folder name'
+        headerToWrite = 'IMDB Movie retrieval results \n\n'
+        
         # Lets create results dir.
         currDir = os.path.dirname(os.path.realpath(__file__))
         makeDirs(resultsDir)
@@ -64,7 +86,30 @@ class BlogSpider(scrapy.Spider):
         # Create dummy file to check if folder creation worked.
         writeToFile(self.htmlDirPath, filename, "Hello! I am creating this dummy file.\n" + scriptLaunchTime)
 
+        self.openCsvFile(self.htmlDirPath,self.csvFilename, headerToWrite)
+
+        self.appendRecordToCsvFile(self.recordHeader)
+        
+
     def parse(self, response):
+        base_url = 'http://www.imdb.com'
+        print ("Inside Parse => ")
+        #for url in response.css('ul li a::attr("href")'):
+        #for url in response.css('ul li a::attr("href").text()').re(r'.*title/.*'):
+        
+        # Let us get the link to next search page showing 250 rows.
+        url = response.xpath("//div[@id='right']/span[@class='pagination']/a[2]/@href").extract()[1]
+        movie_url = base_url + str(url)
+        print ("LIST Page URL => " + movie_url)
+
+        yield scrapy.Request(movie_url, self.parse_each_search_list_pg)
+
+        # Passing this next search page, having 250 entries, to this same function.
+        # Real use case of recursion :) :) 
+        yield scrapy.Request(movie_url, self.parse)
+
+    # This function retrieve each of the 250 entries and pass each page to 
+    def parse_each_search_list_pg(self, response):
         base_url = 'http://www.imdb.com'
         print ("Inside Parse => ")
         #for url in response.css('ul li a::attr("href")'):
@@ -73,9 +118,9 @@ class BlogSpider(scrapy.Spider):
             movie_url = base_url + str(url)
             print ("URL found => " + movie_url)
 
-            yield scrapy.Request(movie_url, self.parse_titles)
+            yield scrapy.Request(movie_url, self.parse_movies)
 
-    def parse_titles(self, response):
+    def parse_movies(self, response):
         self.crawlCount = self.crawlCount + 1
         print ("-------------------------Starting Crawling:" + str(self.crawlCount) + "-------------")
         print ("Inside parse_titles( )")
@@ -98,17 +143,6 @@ class BlogSpider(scrapy.Spider):
         time_duration = time_duration.replace('\n', ' ')
         movie_html_source_code = response.body
         
-        print ("    Movie Title =>  " + movie_title)
-        print ("    Movie URL =>  " + movie_link)
-        print ("    Movie Star Rating =>  " + star_rating)
-        print ("    Movie release_year =>  " + release_year)
-        print ("    Movie release_date =>  " + release_date)
-        print ("    Movie release_country =>  " + release_country)
-        print ("    Movie Director =>  " + director)
-        print ("    Movie Stars_list =>  " + ', '.join(stars_list))
-        print ("    Movie Genre_list =>  " + ', '.join(genre_list))
-        print ("    Movie time_duration =>  " + time_duration)
-
 
         # Lets store a local copy of this page.
         # Creating filename from the key present in the path
@@ -121,11 +155,23 @@ class BlogSpider(scrapy.Spider):
             end_link_key = len(movie_link) - 1
 
         start_link_key = start_link_key + 1
-        movie_filename = movie_link[start_link_key : end_link_key]
+        movie_record_pri_key = movie_link[start_link_key : end_link_key]
+        movie_filename = movie_record_pri_key + ".html"
 
         # print ("(Start, End) = " + str(start_link_key) + " , " + str(end_link_key))
-        print ("    Movie movie_folder name =>  " + self.htmlDirPath)
+        print ("    Movie primary key =>  " + movie_record_pri_key)
+        print ("    Movie Title =>  " + movie_title)
+        print ("    Movie URL =>  " + movie_link)
+        print ("    Movie Star Rating =>  " + star_rating)
+        print ("    Movie release_year =>  " + release_year)
+        print ("    Movie release_date =>  " + release_date)
+        print ("    Movie release_country =>  " + release_country)
+        print ("    Movie Director =>  " + director)
+        print ("    Movie Stars_list =>  " + ', '.join(stars_list))
+        print ("    Movie Genre_list =>  " + ', '.join(genre_list))
+        print ("    Movie time_duration =>  " + time_duration)
         print ("    Movie movie_filename =>  " + movie_filename)
+        print ("    Movie movie_folder name =>  " + self.htmlDirPath)
 
         # Store this page in local directory.
         writeToFile(self.htmlDirPath, movie_filename, movie_html_source_code)
@@ -135,6 +181,11 @@ class BlogSpider(scrapy.Spider):
 
         #for post_title in response.css('div.entries > ul > li a::text').extract():
         #    print ("movie_title" + movie_title)
-        #    yield {'title': post_title, 'movie_title': movie_title}
+
+        yield {'record_id' : movie_record_pri_key, 'movie_title' : movie_title, 'movie_url' : movie_link,'movie_star_rating' : star_rating, 'release_year' : release_year, 'release_date' : release_date, 'release_country' : release_country, 'director' : director, 'stars_list' : ', '.join(stars_list), 'genre_list' : ', '.join(genre_list), 'time_duration' : time_duration, 'movie_filename' : movie_filename, 'movie_folder name' : self.htmlDirPath}
+        
+        currMovieAsCsv = movie_record_pri_key + ',' + movie_title + ',' + movie_link + ',' + star_rating + ',' + release_year + ',' + release_date + ',' + release_country + ',' + director + ',' + '; '.join(stars_list) + ',' + '; '.join(genre_list) + ',' + time_duration + ',' + movie_filename + ',' + self.htmlDirPath
+        self.appendRecordToCsvFile(currMovieAsCsv)
+        
         print ("-------------------------END Crawling:" + str(self.crawlCount) + "------------------")
 
